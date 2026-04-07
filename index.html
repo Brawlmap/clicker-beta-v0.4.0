@@ -6,6 +6,9 @@
     <title>ns's infinite clicker z</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="font.css">
+
+        <!-- Supabase JS library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -110,14 +113,27 @@
         </div>
     </div>
 
+<!-- Supabase ES module + init -->
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  // Initialize Supabase (frontend only, anon key)
+  window.supabase = createClient(
+    'https://hrmnvtbpjjpsxmhtacgz.supabase.co',
+    'sb_publishable_jlbV4rkPHukjiGew8jV9Mw_k2Mo4_rg'
+    );
+    </script>
+
     <script src="index.js"></script>
     <script src="localstorage.js"></script>
     <script src="rebirth.js"></script>
     <script src="achievements.js"></script>
     <script src="multiplier.js"></script>
     <script src="ascension.js"></script>
-    <script src="account.js"></script>
-    <script>
+
+
+    <script type="module" src="account.js"></script>
+      <script>
         // Load save, then init
         loadGame();
         updateCps();

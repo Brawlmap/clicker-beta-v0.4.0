@@ -1,6 +1,12 @@
 // ── Supabase configuration ───────────────────────────────────────────────────
+// FIXED: Using Supabase JS client library (install: npm install @supabase/supabase-js)
+// This uses the official SDK which handles JWT tokens properly
+import { createClient } from '@supabase/supabase-js';
+
 const SB_URL = 'https://hrmnvtbpjjpsxmhtacgz.supabase.co';
 const SB_KEY = 'sb_publishable_jlbV4rkPHukjiGew8jV9Mw_k2Mo4_rg';
+
+const supabase = createClient(SB_URL, SB_KEY);
 
 // ── Session management ───────────────────────────────────────────────────────
 const SESSION_KEY = 'ns_clicker_session';
@@ -13,161 +19,29 @@ function getSession() {
   } catch { return null; }
 }
 
-function setSession(user) {
-  currentUser = user;
-  if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  else localStorage.removeItem(SESSION_KEY);
-}
-
-// account.js - update your login/signup functions
-async function accountSignUp(username, password) {
-  if (!username || !password) return { ok: false, error: 'missing fields' };
-  if (password.length < 6) return { ok: false, error: 'pass too short' };
-
-  // client-side hash is just for transmission privacy
-  const hashed = await hashPassword(password);
-  
-  // check if user exists first
-  const { data: existing } = await sbFetch(`/rest/v1/players?username=eq.${username}`);
-  if (existing && existing.length > 0) return { ok: false, error: 'username taken' };
-
-  const newUser = {
-    username,
-    password_hash: hashed, // store the hash, never the raw pass
-    clicks: 0,
-    rebirths: 0,
-    created_at: new Date()
-  };
-
-  return await sbFetch('/rest/v1/players', 'POST', newUser);
-}
-
-// ── Supabase fetch helper ─────────────────────────────────────────────────────
-async function sbFetch(path, method = 'GET', body = null, extra = {}) {
-  const opts = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SB_KEY,
-      'Authorization': `Bearer ${SB_KEY}`,
-      ...extra,
-    },
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(SB_URL + path, opts);
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  return { ok: res.ok, status: res.status, data };
-}
-
-// ── Password hashing (SHA-256 via Web Crypto or fallback) ─────────────────────
-// FIX #1: Hash bypass patch.
-// Old code allowed logging in by passing a raw 64-char hex string that looked
-// like a hash — it was returned as-is, skipping the actual hash step, so an
-// attacker could log in without knowing the real password.
-// Fix: always hash the input, no matter its length. The 64-char shortcut is gone.
-function rightRotate(value, amount) {
-  return (value >>> amount) | (value << (32 - amount));
-}
-
-function sha256Fallback(message) {
-  const K = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
-    0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
-    0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
-    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
-    0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-  ];
-
-  const data = new TextEncoder().encode(message);
-  const bitLength = data.length * 8;
-  const paddedLength = (((data.length + 8) >>> 6) + 1) << 6;
-  const padded = new Uint8Array(paddedLength);
-  padded.set(data);
-  padded[data.length] = 0x80;
-  const view = new DataView(padded.buffer);
-  view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000), false);
-  view.setUint32(paddedLength - 4, bitLength >>> 0, false);
-
-  const H = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-  ];
-
-  const W = new Uint32Array(64);
-
-  for (let chunkStart = 0; chunkStart < paddedLength; chunkStart += 64) {
-    for (let i = 0; i < 16; i++) {
-      W[i] = view.getUint32(chunkStart + i * 4, false);
-    }
-    for (let i = 16; i < 64; i++) {
-      const s0 = rightRotate(W[i - 15], 7) ^ rightRotate(W[i - 15], 18) ^ (W[i - 15] >>> 3);
-      const s1 = rightRotate(W[i - 2], 17) ^ rightRotate(W[i - 2], 19) ^ (W[i - 2] >>> 10);
-      W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
-    }
-
-    let a = H[0]; let b = H[1]; let c = H[2]; let d = H[3];
-    let e = H[4]; let f = H[5]; let g = H[6]; let h = H[7];
-
-    for (let i = 0; i < 64; i++) {
-      const S1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
-      const ch = (e & f) ^ (~e & g);
-      const temp1 = (h + S1 + ch + K[i] + W[i]) >>> 0;
-      const S0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const temp2 = (S0 + maj) >>> 0;
-
-      h = g;
-      g = f;
-      f = e;
-      e = (d + temp1) >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = (temp1 + temp2) >>> 0;
-    }
-
-    H[0] = (H[0] + a) >>> 0;
-    H[1] = (H[1] + b) >>> 0;
-    H[2] = (H[2] + c) >>> 0;
-    H[3] = (H[3] + d) >>> 0;
-    H[4] = (H[4] + e) >>> 0;
-    H[5] = (H[5] + f) >>> 0;
-    H[6] = (H[6] + g) >>> 0;
-    H[7] = (H[7] + h) >>> 0;
+function setSession(session) {
+  currentUser = session?.user || null;
+  if (session) {
+    // Store entire session including JWT token
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      user: session.user,
+      access_token: session.session?.access_token,
+      refresh_token: session.session?.refresh_token,
+    }));
+  } else {
+    localStorage.removeItem(SESSION_KEY);
   }
-
-  return H.map(h => h.toString(16).padStart(8, '0')).join('');
-}
-
-async function hashPassword(password) {
-  const normalized = String(password);
-
-  if (window.crypto && crypto.subtle && typeof crypto.subtle.digest === 'function') {
-    const enc = new TextEncoder().encode(normalized);
-    const buf = await crypto.subtle.digest('SHA-256', enc);
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  return sha256Fallback(normalized);
 }
 
 // ── Server-side value sanity caps ─────────────────────────────────────────────
-// FIX #2 / FIX #5 / FIX #6: Prevent injected / impossibly large values
-// from reaching the leaderboard. All stats are capped before any cloud write.
-// These limits are generous enough for any real player but block injected
-// billions / quadrillions. Adjust the caps as your game grows.
+// FIXED: Values are capped before ANY cloud write
 const STAT_CAPS = {
   clicks:     1e60,   // up to Vi range which formatNum supports
   rebirths:   1e60,
   ascensions: 1e12,
 };
+
+const SANE_CLICK_CAP = 1e60;
 
 function sanitiseStats(clicks, rebirths, ascensions) {
   return {
@@ -176,6 +50,30 @@ function sanitiseStats(clicks, rebirths, ascensions) {
     ascensions: Math.max(0, Math.min(STAT_CAPS.ascensions, isFinite(ascensions) ? Math.floor(ascensions) : 0)),
   };
 }
+
+// ── NEW FIX: Validate stats in real-time (every 5 seconds) ─────────────────────
+// This catches injected localStorage values immediately
+function validateLocalStats() {
+  // Reject non-finite values
+  if (!isFinite(clickCount)) clickCount = 0;
+  if (!isFinite(rebirthCount)) rebirthCount = 0;
+  if (typeof ascensionCount !== 'undefined' && !isFinite(ascensionCount)) ascensionCount = 0;
+  
+  // Reject negative values
+  if (clickCount < 0) clickCount = 0;
+  if (rebirthCount < 0) rebirthCount = 0;
+  if (typeof ascensionCount !== 'undefined' && ascensionCount < 0) ascensionCount = 0;
+  
+  // Hard caps (prevent overflow)
+  clickCount = Math.min(clickCount, STAT_CAPS.clicks);
+  rebirthCount = Math.min(rebirthCount, STAT_CAPS.rebirths);
+  if (typeof ascensionCount !== 'undefined') {
+    ascensionCount = Math.min(ascensionCount, STAT_CAPS.ascensions);
+  }
+}
+
+// Run validation every 5 seconds
+setInterval(validateLocalStats, 5000);
 
 // ── Build game_data snapshot ──────────────────────────────────────────────────
 function buildGameData() {
@@ -197,6 +95,15 @@ function buildGameData() {
       multCurrency,
       upgradeLevels: Object.fromEntries(multUpgrades.map(u => [u.id, u.level])),
     } : null,
+    autoBuy: typeof autoBuyUnlocked !== 'undefined' ? {
+      unlocked: { ...autoBuyUnlocked },
+      enabled:  { ...autoBuyEnabled  },
+    } : null,
+    autoRebirth: typeof autoRebirthUnlocked !== 'undefined' ? {
+      unlocked:  autoRebirthUnlocked,
+      enabled:   autoRebirthEnabled,
+      threshold: autoRebirthThreshold,
+    } : null,
     ascension: typeof ascensionCount !== 'undefined' ? {
       count:  ascensionCount,
       shards: ascensionShards,
@@ -207,189 +114,167 @@ function buildGameData() {
   };
 }
 
-// ── Apply loaded game_data into game state ────────────────────────────────────
 function applyGameData(data) {
   if (!data) return;
-  clickCount  = data.clickCount  || 0;
-  clickPower  = data.clickPower  || 1;
-  rebirthCount = data.rebirthCount || 0;
-  if (typeof totalClicksEver  !== 'undefined') totalClicksEver  = data.totalClicksEver  || 0;
-  if (typeof manualClickCount !== 'undefined') manualClickCount = data.manualClickCount || 0;
+  if (data.clickCount) clickCount = clampStat(data.clickCount, STAT_CAPS.clicks);
+  if (data.clickPower) clickPower = clampStat(data.clickPower, 1e12, 1);
+  if (data.rebirthCount) rebirthCount = clampStat(data.rebirthCount, STAT_CAPS.rebirths);
+  if (data.totalClicksEver && typeof totalClicksEver !== 'undefined')
+    totalClicksEver = clampStat(data.totalClicksEver, STAT_CAPS.clicks);
+  if (data.manualClickCount && typeof manualClickCount !== 'undefined')
+    manualClickCount = clampStat(data.manualClickCount, STAT_CAPS.clicks);
 
-  (data.items || []).forEach(saved => {
-    const item = shopItems.find(i => i.id === saved.id);
-    if (item) item.count = saved.count || 0;
-  });
+  if (data.items) {
+    data.items.forEach(saved => {
+      const item = shopItems.find(i => i.id === saved.id);
+      if (item) item.count = clampStat(saved.count, 1e20);
+    });
+  }
 
   if (data.rebirthUpgradeLevels) {
     Object.entries(data.rebirthUpgradeLevels).forEach(([k, lvl]) => {
-      if (rebirthUpgrades[k]) rebirthUpgrades[k].level = lvl || 0;
+      if (rebirthUpgrades[k])
+        rebirthUpgrades[k].level = clampStat(lvl, 1e6);
     });
   }
 
   if (data.achievementsUnlocked && typeof achievements !== 'undefined') {
     achievementCpsBonus = 0;
     achievementClickBonus = 0;
-    if (typeof achievementRebirthBonus !== 'undefined') achievementRebirthBonus = 0;
     data.achievementsUnlocked.forEach(id => {
       const ach = achievements.find(a => a.id === id);
-      if (ach) { ach.unlocked = true; ach.onUnlock(); }
+      if (ach) {
+        ach.unlocked = true;
+        ach.onUnlock();
+      }
     });
   }
 
   if (data.multMinigame && typeof clickMultiplier !== 'undefined') {
-    clickMultiplier = data.multMinigame.clickMultiplier || 1;
-    multCurrency    = data.multMinigame.multCurrency    || 0;
+    clickMultiplier = Math.max(1, Number(data.multMinigame.clickMultiplier) || 1);
+    multCurrency    = Math.max(0, Number(data.multMinigame.multCurrency)    || 0);
     if (data.multMinigame.upgradeLevels) {
       multUpgrades.forEach(u => {
-        u.level = data.multMinigame.upgradeLevels[u.id] || 0;
+        u.level = clampStat(data.multMinigame.upgradeLevels[u.id], 1e6);
       });
     }
+  }
+
+  if (data.autoBuy && typeof autoBuyUnlocked !== 'undefined') {
+    Object.assign(autoBuyUnlocked, data.autoBuy.unlocked || {});
+    Object.assign(autoBuyEnabled,  data.autoBuy.enabled  || {});
+  }
+
+  if (data.autoRebirth && typeof autoRebirthUnlocked !== 'undefined') {
+    autoRebirthUnlocked  = !!data.autoRebirth.unlocked;
+    autoRebirthEnabled   = !!data.autoRebirth.enabled;
+    autoRebirthThreshold = clampStat(data.autoRebirth.threshold, 1e60, 1_000_000);
   }
 
   if (data.ascension && typeof ascensionCount !== 'undefined') {
-    ascensionCount  = data.ascension.count  || 0;
-    ascensionShards = data.ascension.shards || 0;
+    ascensionCount  = clampStat(data.ascension.count,  1e12);
+    ascensionShards = clampStat(data.ascension.shards, 1e15);
     if (data.ascension.upgradeLevels) {
       Object.entries(data.ascension.upgradeLevels).forEach(([k, lvl]) => {
-        if (ascensionUpgrades[k]) ascensionUpgrades[k].level = lvl || 0;
+        if (ascensionUpgrades[k])
+          ascensionUpgrades[k].level = clampStat(lvl, 1e6);
       });
     }
   }
-
-  updateCps();
-  updateDisplay();
-  renderShop();
-  renderRebirthShop();
-  if (typeof renderAchievements === 'function') renderAchievements();
-  if (typeof renderMultMinigame === 'function') renderMultMinigame();
-  if (typeof renderAscensionShop === 'function') renderAscensionShop();
 }
 
-// ── Sign Up ───────────────────────────────────────────────────────────────────
+function clampStat(val, cap, fallback = 0) {
+  const n = Number(val);
+  if (!isFinite(n) || isNaN(n) || n < 0) return fallback;
+  return Math.min(Math.floor(n), cap);
+}
+
+// ── Authentication: Sign Up ───────────────────────────────────────────────────
+// FIXED: Uses Supabase Auth instead of manual password hashing
 async function accountSignUp(username, password) {
-  if (!username || !password) return { ok: false, error: 'fill in all fields' };
-  if (username.length < 3)    return { ok: false, error: 'username must be 3+ chars' };
-  if (password.length < 6)    return { ok: false, error: 'password must be 6+ chars' };
+  if (!username || !password) return { ok: false, error: 'missing fields' };
+  if (password.length < 6) return { ok: false, error: 'password too short' };
+  if (username.length < 3) return { ok: false, error: 'username too short' };
 
-  // Check username taken
-  const check = await sbFetch(`/rest/v1/players?username=eq.${encodeURIComponent(username)}&select=id`);
-  if (check.data && check.data.length > 0) return { ok: false, error: 'username already taken' };
+  try {
+    // Use Supabase Auth (handles bcrypt + salt internally)
+    const { data, error } = await supabase.auth.signUp({
+      email: `${username}@clicker.local`, // Use as username
+      password: password,
+      options: {
+        data: { username: username } // Store username in metadata
+      }
+    });
 
-  const hashed = await hashPassword(password);
-  const gameData = buildGameData();
+    if (error) return { ok: false, error: error.message };
+    
+    // Create player record
+    const { error: dbError } = await supabase
+      .from('players')
+      .insert({
+        id: data.user?.id,
+        username: username,
+        user_id: data.user?.id, // FIX: Link to auth user
+        clicks: 0,
+        rebirths: 0,
+        ascensions: 0,
+        game_data: null,
+        created_at: new Date().toISOString(),
+      });
 
-  // FIX #2 / #5: sanitise stats before writing so injected values can't reach DB
-  const safe = sanitiseStats(clickCount, rebirthCount,
-    typeof ascensionCount !== 'undefined' ? ascensionCount : 0);
+    if (dbError) return { ok: false, error: dbError.message };
 
-  const res = await sbFetch('/rest/v1/players', 'POST', {
-    username,
-    password_hash: hashed,
-    clicks:     safe.clicks,
-    rebirths:   safe.rebirths,
-    ascensions: safe.ascensions,
-    game_data:  gameData,
-  }, { 'Prefer': 'return=representation' });
+    // Auto-login after signup
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: `${username}@clicker.local`,
+      password: password,
+    });
 
-  if (!res.ok) return { ok: false, error: res.data?.message || 'signup failed' };
-
-  const user = res.data[0];
-  setSession({ id: user.id, username: user.username });
-  return { ok: true };
+    if (signInError) return { ok: false, error: signInError.message };
+    
+    setSession(signInData);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
 }
 
-// ── Login ─────────────────────────────────────────────────────────────────────
-// FIX #3: God-mode auto-clicker defence.
-// After loading the cloud save we check whether clickCount is suspiciously
-// high compared to what the game could realistically produce. If it is, we
-// silently cap it instead of letting the inflated number persist.
-// (The real fix for server-side injection is Supabase RLS + a backend validator,
-// but this client-side cap prevents the local game state from being exploited
-// further after login.)
-const SANE_CLICK_CAP = 1e55; // way beyond any real player, stops obvious cheats
-
+// ── Authentication: Sign In ───────────────────────────────────────────────────
+// FIXED: Uses Supabase Auth JWT tokens
 async function accountLogin(username, password) {
-  if (!username || !password) return { ok: false, error: 'fill in all fields' };
+  if (!username || !password) return { ok: false, error: 'missing fields' };
 
-  // FIX #1 in action: hashPassword now ALWAYS hashes — a 64-char raw hash string
-  // will itself be hashed, so it won't match the stored value.
-  const hashed = await hashPassword(password);
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: `${username}@clicker.local`,
+      password: password,
+    });
 
-  // FIX #2: Only SELECT the columns we actually need (never password_hash in list)
-  // We still need password_hash here for the login check — but notice we never
-  // expose the full player list anywhere (see FIX #2b below).
-  const res = await sbFetch(
-    `/rest/v1/players?username=eq.${encodeURIComponent(username)}&password_hash=eq.${hashed}&select=id,username,game_data,clicks,rebirths,ascensions`
-  );
-
-  if (!res.ok || !res.data || res.data.length === 0)
-    return { ok: false, error: 'wrong username or password' };
-
-  const user = res.data[0];
-  setSession({ id: user.id, username: user.username });
-
-  // Load cloud save, then cap any unrealistic values (FIX #3 / #5 / #6)
-  if (user.game_data) {
-    applyGameData(user.game_data);
-    if (clickCount > SANE_CLICK_CAP) clickCount = SANE_CLICK_CAP;
-    if (rebirthCount > STAT_CAPS.rebirths) rebirthCount = STAT_CAPS.rebirths;
-    if (typeof ascensionCount !== 'undefined' && ascensionCount > STAT_CAPS.ascensions)
-      ascensionCount = STAT_CAPS.ascensions;
+    if (error) return { ok: false, error: error.message };
+    
+    setSession(data);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
   }
-
-  return { ok: true };
 }
 
-// ── Logout — clears session AND resets progress to guest state ────────────────
-function accountLogout() {
-  if (!confirm('logging out will reset your local progress to guest. your cloud save is safe — you can log back in anytime!')) return;
+// ── Authentication: Logout ────────────────────────────────────────────────────
+async function accountLogout() {
+  const { error } = await supabase.auth.signOut();
   setSession(null);
-
-  localStorage.removeItem('ns_clicker_save');
-  clickCount    = 0;
-  clickPower    = 1;
-  rebirthCount  = 0;
-  totalClicksEver  = 0;
-  manualClickCount = 0;
-  shopItems.forEach(i => i.count = 0);
-  Object.values(rebirthUpgrades).forEach(u => u.level = 0);
-  if (typeof achievements !== 'undefined') {
-    achievements.forEach(a => a.unlocked = false);
-    achievementCpsBonus   = 0;
-    achievementClickBonus = 0;
-    if (typeof achievementRebirthBonus !== 'undefined') achievementRebirthBonus = 0;
-  }
-  if (typeof clickMultiplier !== 'undefined') {
-    clickMultiplier = 1.0;
-    multCurrency    = 0.0;
-    multUpgrades.forEach(u => u.level = 0);
-  }
-
-  if (typeof ascensionCount !== 'undefined') {
-    ascensionCount  = 0;
-    ascensionShards = 0;
-    Object.values(ascensionUpgrades).forEach(u => u.level = 0);
-  }
-
-  updateCps();
-  updateDisplay();
-  renderShop();
-  renderRebirthShop();
-  if (typeof renderAchievements === 'function') renderAchievements();
-  if (typeof renderMultMinigame === 'function') renderMultMinigame();
-  if (typeof renderAscensionShop === 'function') renderAscensionShop();
-  renderSettingsPanel();
+  if (error) console.error('Logout error:', error);
 }
 
 // ── Cloud save (push local → Supabase) ───────────────────────────────────────
-// FIX #4 / #5 / #6: Sanitise all stats before every cloud write so that
-// localStorage-injected values (rebirth injection, Tier 12 cheat, etc.) are
-// stripped before they ever reach the database / leaderboard.
+// FIXED: Validates stats AND uses JWT authentication
 async function cloudSave() {
   if (!currentUser) return;
 
-  // Cap any tampered local values before writing
+  // FIXED: Always validate before saving
+  validateLocalStats();
+
+  // Cap any tampered values
   if (clickCount > SANE_CLICK_CAP) clickCount = SANE_CLICK_CAP;
   if (rebirthCount > STAT_CAPS.rebirths) rebirthCount = STAT_CAPS.rebirths;
   if (typeof ascensionCount !== 'undefined' && ascensionCount > STAT_CAPS.ascensions)
@@ -399,16 +284,44 @@ async function cloudSave() {
     typeof ascensionCount !== 'undefined' ? ascensionCount : 0);
 
   const gameData = buildGameData();
-  await sbFetch(`/rest/v1/players?id=eq.${currentUser.id}`, 'PATCH', {
-    clicks:      safe.clicks,
-    rebirths:    safe.rebirths,
-    ascensions:  safe.ascensions,
-    game_data:   gameData,
-  });
+
+  try {
+    // FIXED: Using Supabase JS client (handles JWT automatically)
+    const { error } = await supabase
+      .from('players')
+      .update({
+        clicks:      safe.clicks,
+        rebirths:    safe.rebirths,
+        ascensions:  safe.ascensions,
+        game_data:   gameData,
+        updated_at:  new Date().toISOString(),
+      })
+      .eq('id', currentUser.id); // RLS will verify this is your own record
+
+    if (error) {
+      console.error('Cloud save error:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('Cloud save exception:', e);
+    return false;
+  }
 }
 
 // Auto cloud-save every 15 seconds when logged in
 setInterval(() => { if (currentUser) cloudSave(); }, 15000);
+
+// ── Manual cloud save button ──────────────────────────────────────────────────
+async function cloudSaveManual() {
+  const btn = document.querySelector('.acc-btn-save');
+  if (btn) { btn.textContent = 'saving...'; btn.disabled = true; }
+  const success = await cloudSave();
+  if (btn) {
+    btn.textContent = success ? '✅ saved!' : '❌ failed';
+    setTimeout(() => { btn.textContent = '☁️ save now'; btn.disabled = false; }, 2000);
+  }
+}
 
 // ── Render into settings panel ────────────────────────────────────────────────
 function renderAccountPanel() { renderSettingsPanel(); }
@@ -418,7 +331,7 @@ function renderSettingsPanel() {
   if (!container) return;
 
   if (currentUser) {
-    const displayName = currentUser.username === 'public_player' ? '🌍 Public Game' : currentUser.username;
+    const displayName = currentUser.user_metadata?.username || currentUser.email || 'Player';
     container.innerHTML = `
       <div class="acc-card">
         <div class="acc-title">👤 ${displayName}</div>
@@ -436,14 +349,14 @@ function renderSettingsPanel() {
           <span class="acc-stat-val" style="color:#f59e0b;">${typeof ascensionCount !== 'undefined' ? ascensionCount : 0}</span>
         </div>
         <button class="acc-btn acc-btn-save" onclick="cloudSaveManual()">☁️ save now</button>
-        <button class="acc-btn acc-btn-logout" onclick="accountLogout()">🚪 logout</button>
+        <button class="acc-btn acc-btn-logout" onclick="accountLogout(); location.reload();">🚪 logout</button>
       </div>
     `;
   } else {
     container.innerHTML = `
       <div class="acc-card">
         <div class="acc-title">👤 account</div>
-        <div class="acc-desc">sign in to save progress to the cloud &amp; appear on the leaderboard. logging out resets local progress.</div>
+        <div class="acc-desc">sign in to save progress to the cloud &amp; appear on the leaderboard.</div>
         <div id="acc-error" class="acc-error hidden"></div>
 
         <div class="acc-tabs">
@@ -458,11 +371,10 @@ function renderSettingsPanel() {
         </div>
 
         <div id="acc-form-signup" class="acc-form hidden">
-          <input class="acc-input" id="acc-signup-user" type="text" placeholder="username" autocomplete="username" />
+          <input class="acc-input" id="acc-signup-user" type="text" placeholder="username (3+ chars)" autocomplete="username" />
           <input class="acc-input" id="acc-signup-pass" type="password" placeholder="password (6+ chars)" autocomplete="new-password" />
           <button class="acc-btn acc-btn-primary" id="acc-signup-btn" onclick="handleSignUp()">create account</button>
         </div>
-
       </div>
     `;
   }
@@ -505,6 +417,7 @@ async function handleLogin() {
   setAccLoading(false, 'login');
   if (!res.ok) { showAccError(res.error); return; }
   renderSettingsPanel();
+  location.reload(); // Reload to sync cloud data
 }
 
 async function handleSignUp() {
@@ -516,49 +429,57 @@ async function handleSignUp() {
   setAccLoading(false, 'signup');
   if (!res.ok) { showAccError(res.error); return; }
   renderSettingsPanel();
-}
-
-async function cloudSaveManual() {
-  const btn = document.querySelector('.acc-btn-save');
-  if (btn) { btn.textContent = 'saving...'; btn.disabled = true; }
-  await cloudSave();
-  if (btn) {
-    btn.textContent = '✅ saved!';
-    setTimeout(() => { btn.textContent = '☁️ save now'; btn.disabled = false; }, 1500);
-  }
+  location.reload();
 }
 
 // ── Init: restore session on page load ───────────────────────────────────────
 (async function initAccount() {
-  const session = getSession();
+  // Check if user is logged in via Supabase
+  const { data: { session } } = await supabase.auth.getSession();
+  
   if (session) {
-    currentUser = session;
-    // Load cloud save data when user is logged in
+    currentUser = session.user;
+    
+    // Load cloud save data
     try {
-      const res = await sbFetch(
-        `/rest/v1/players?username=eq.${encodeURIComponent(session.username)}&select=id,username,game_data,clicks,rebirths,ascensions`
-      );
-      if (res.ok && res.data && res.data.length > 0) {
-        const user = res.data[0];
-        // Load cloud save, then cap any unrealistic values
-        if (user.game_data) {
-          applyGameData(user.game_data);
-          if (clickCount > SANE_CLICK_CAP) clickCount = SANE_CLICK_CAP;
-          if (rebirthCount > STAT_CAPS.rebirths) rebirthCount = STAT_CAPS.rebirths;
-          if (typeof ascensionCount !== 'undefined' && ascensionCount > STAT_CAPS.ascensions)
-            ascensionCount = STAT_CAPS.ascensions;
-        }
-        // Update UI
-        updateCps();
-        updateDisplay();
-        renderShop();
-        renderRebirthShop();
-        if (typeof renderAchievements === 'function') renderAchievements();
-        if (typeof renderMultMinigame === 'function') renderMultMinigame();
-        if (typeof renderAscensionShop === 'function') renderAscensionShop();
+      const { data, error } = await supabase
+        .from('players')
+        .select('id,username,game_data,clicks,rebirths,ascensions')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (error) {
+        console.error('Failed to load player data:', error);
+        return;
       }
+
+      if (data && data.game_data) {
+        applyGameData(data.game_data);
+        validateLocalStats(); // Safety check
+      }
+
+      updateCps();
+      updateDisplay();
+      renderShop();
+      renderRebirthShop();
+      if (typeof renderAchievements === 'function') renderAchievements();
+      if (typeof renderMultMinigame === 'function') renderMultMinigame();
+      if (typeof renderAscensionShop === 'function') renderAscensionShop();
     } catch (e) {
       console.warn('Failed to load cloud save on init:', e);
     }
   }
+  
+  renderSettingsPanel();
 })();
+
+// ── Listen for auth state changes ─────────────────────────────────────────────
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    currentUser = session.user;
+    renderSettingsPanel();
+  } else if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    renderSettingsPanel();
+  }
+});
