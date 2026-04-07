@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>leaderboard — ns's infinite clicker z</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .lb-page {
+      min-height: 100vh;
+      background: #0d0d0d;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .lb-container {
+      width: min(70vw, 1200px);
+      max-width: 1200px;
+    }
+
+    .lb-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+
+    .lb-title {
+      color: #fff;
+      font-size: 1.4rem;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+    }
+
+    .lb-title span {
+      color: #e0a800;
+    }
+
+    .lb-back {
+      color: #888;
+      font-size: 0.82rem;
+      font-family: Arial, sans-serif;
+      text-decoration: none;
+      border: 1px solid #333;
+      padding: 5px 12px;
+      border-radius: 6px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .lb-back:hover { color: #fff; border-color: #777; }
+
+    .lb-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #222;
+    }
+
+    .lb-tab {
+      background: none;
+      border: none;
+      color: #777;
+      font-size: 0.88rem;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      padding: 6px 14px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: color 0.15s;
+    }
+
+    .lb-tab.active { color: #fff; border-bottom-color: #e0a800; }
+    .lb-tab:hover:not(.active) { color: #aaa; }
+
+    .lb-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .lb-table th {
+      color: #555;
+      font-size: 0.72rem;
+      font-family: Arial, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid #1e1e1e;
+    }
+
+    .lb-table th:last-child { text-align: right; }
+
+    .lb-row {
+      border-bottom: 1px solid #181818;
+      transition: background 0.1s;
+    }
+
+    .lb-row:hover { background: #161616; }
+
+    .lb-row td {
+      padding: 12px;
+      font-family: Arial, sans-serif;
+      font-size: 0.88rem;
+      vertical-align: middle;
+    }
+
+    .lb-rank {
+      color: #555;
+      font-size: 0.8rem;
+      width: 36px;
+    }
+
+    .lb-rank.gold   { color: #ffd700; font-weight: bold; font-size: 1rem; }
+    .lb-rank.silver { color: #c0c0c0; font-weight: bold; font-size: 1rem; }
+    .lb-rank.bronze { color: #cd7f32; font-weight: bold; font-size: 1rem; }
+
+    .lb-name {
+      color: #e0e0e0;
+      font-weight: bold;
+    }
+
+    .lb-name.is-you { color: #15eb55; }
+    .lb-name.is-you::after { content: ' (you)'; color: #555; font-size: 0.72rem; font-weight: normal; }
+
+    .lb-val {
+      color: #aaa;
+      text-align: right;
+    }
+
+    .lb-empty {
+      color: #444;
+      font-size: 0.88rem;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px 0;
+    }
+
+    .lb-loading {
+      color: #555;
+      font-size: 0.88rem;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px 0;
+      animation: lb-pulse 1.2s ease infinite;
+    }
+
+    @keyframes lb-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .lb-refresh {
+      background: none;
+      border: 1px solid #2a2a2a;
+      color: #777;
+      font-size: 0.75rem;
+      font-family: Arial, sans-serif;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .lb-refresh:hover { color: #aaa; border-color: #444; }
+
+    .lb-you-row td { background: #0d1a0d; }
+    .lb-you-row:hover td { background: #0f200f; }
+  </style>
+</head>
+<body>
+  <div class="lb-page">
+    <div class="lb-container">
+
+      <div class="lb-header">
+        <div class="lb-title">🏆 <span>leaderboard</span></div>
+        <a href="index.html" class="lb-back">← back to game</a>
+      </div>
+
+      <div class="lb-tabs">
+        <button class="lb-tab active" onclick="switchTab('clicks')">💰 most clicks</button>
+        <button class="lb-tab" onclick="switchTab('rebirths')">♻️ most rebirths</button>
+        <button class="lb-tab" onclick="switchTab('ascensions')">🌟 most ascensions</button>
+      </div>
+
+      <button class="lb-refresh" onclick="loadLeaderboard()">🔄 refresh</button>
+
+      <div id="lb-content">
+        <div class="lb-loading">loading...</div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SB_URL = 'https://hrmnvtbpjjpsxmhtacgz.supabase.co';
+    const SB_KEY = 'sb_publishable_jlbV4rkPHukjiGew8jV9Mw_k2Mo4_rg';
+    const SESSION_KEY = 'ns_clicker_session';
+
+    let currentTab = 'clicks';
+    let currentUser = null;
+
+    try {
+      const s = localStorage.getItem(SESSION_KEY);
+      if (s) currentUser = JSON.parse(s);
+    } catch {}
+
+    function formatNum(n) {
+      if (n >= 1e15) return (n / 1e15).toFixed(2) + 'Qd';
+      if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+      if (n >= 1e9)  return (n / 1e9).toFixed(2)  + 'B';
+      if (n >= 1e6)  return (n / 1e6).toFixed(2)  + 'M';
+      if (n >= 1e3)  return (n / 1e3).toFixed(1)  + 'K';
+      return Math.floor(n).toString();
+    }
+
+    function rankLabel(i) {
+      if (i === 0) return { text: '🥇', cls: 'gold' };
+      if (i === 1) return { text: '🥈', cls: 'silver' };
+      if (i === 2) return { text: '🥉', cls: 'bronze' };
+      return { text: `#${i + 1}`, cls: '' };
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.lb-tab').forEach((b, i) => {
+        b.classList.toggle('active',
+          (i === 0 && tab === 'clicks') ||
+          (i === 1 && tab === 'rebirths') ||
+          (i === 2 && tab === 'ascensions')
+        );
+      });
+      loadLeaderboard();
+    }
+
+    async function loadLeaderboard() {
+      document.getElementById('lb-content').innerHTML = '<div class="lb-loading">loading...</div>';
+
+      const col = currentTab === 'clicks' ? 'clicks' : currentTab === 'rebirths' ? 'rebirths' : 'ascensions';
+      const url = `${SB_URL}/rest/v1/players?select=username,clicks,rebirths,ascensions&order=${col}.desc.nullslast&limit=50`;
+
+      try {
+        const res = await fetch(url, {
+          headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+        });
+        const rows = await res.json();
+
+        if (!rows || rows.length === 0) {
+          document.getElementById('lb-content').innerHTML = '<div class="lb-empty">no players yet — be the first!</div>';
+          return;
+        }
+
+        const colLabel = col === 'clicks' ? 'clicks' : col === 'rebirths' ? 'rebirths' : 'ascensions';
+
+        const html = `
+          <table class="lb-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>player</th>
+                <th style="text-align:right">${colLabel}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((row, i) => {
+                const rank = rankLabel(i);
+                const isYou = currentUser && row.username === currentUser.username;
+                const val = col === 'clicks' ? formatNum(row.clicks)
+                          : col === 'rebirths' ? formatNum(row.rebirths)
+                          : (row.ascensions != null ? row.ascensions : '—');
+                return `
+                  <tr class="lb-row ${isYou ? 'lb-you-row' : ''}">
+                    <td class="lb-rank ${rank.cls}">${rank.text}</td>
+                    <td class="lb-name ${isYou ? 'is-you' : ''}">${row.username}</td>
+                    <td class="lb-val">${val}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+        document.getElementById('lb-content').innerHTML = html;
+      } catch (e) {
+        document.getElementById('lb-content').innerHTML = '<div class="lb-empty">failed to load — check connection</div>';
+      }
+    }
+
+    loadLeaderboard();
+  </script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ns's infinite clicker z</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="font.css">
+</head>
+<body>
+
+    <div class="main">
+        <div class="left">
+            <div class="stat-box">
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">click:</div>
+                        <span class="stat-value clicks-cost">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">rebirth:</div>
+                        <span class="stat-value" id="rebirth-display">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">ascension:</div>
+                        <span class="stat-value" id="ascension-display" style="color:#f59e0b;">0</span>
+                    </div>
+                </div>
+            </div>
+            <p class="cps-label">
+                current cps: <span id="cps">0</span>
+            </p>
+            <button class="click-btn" id="clicks" onclick="increaseClicks()">
+                <img src="./assets/clicks.png" alt="" class="clicks-image">
+            </button>
+
+            <div class="nav-container">
+                <button class="nav-btn active" id="tab-shop" onclick="openTab('shop')" style="font-family: sans-serif;">
+                    🖱️ clicks shop
+                </button>
+                <button class="nav-btn" id="tab-auto" onclick="openTab('auto')" style="font-family: sans-serif;">
+                    ♻️ rebirth shop
+                </button>
+
+                <button class="nav-btn" id="tab-ascension" onclick="openTab('ascension')" style="font-family: sans-serif;">
+                    🌟 ascension
+                </button>
+
+                 <button class="nav-btn" id="tab-achievements" onclick="openTab('achievements')" style="font-family: sans-serif;">
+                    🏆 achievements
+                </button>
+
+                <button class="nav-btn" id="tab-multiplier" onclick="openTab('multiplier')" style="font-family: sans-serif;">
+                    ✨ multiplier
+                </button>
+               
+                <button class="nav-btn" id="tab-settings" onclick="openTab('settings'); renderSettingsPanel();" style="font-family: sans-serif;">
+                    ⚙️ settings
+                </button>
+            </div>
+            
+
+            <div class="multiplier-container">
+                <div class="multiplier-bar">
+                    <button class="mult-btn active" onclick="setMultiplier(1)">1x</button>
+                    <button class="mult-btn" onclick="setMultiplier(10)">10x</button>
+                    <button class="mult-btn" onclick="setMultiplier(25)">25x</button>
+                    <button class="mult-btn" onclick="setMultiplier(50)">50x</button>
+                    <button class="mult-btn" onclick="setMultiplier(100)">100x</button>
+                    <button class="mult-btn" onclick="setMultiplier('max')">max</button>
+                </div>
+            </div>
+
+            <!-- Shop Panel -->
+            <div class="shop-panel" id="panel-shop">
+                <div id="shop-items" class="tier-grid"></div>
+            </div>
+
+            <!-- Rebirth Panel -->
+            <div class="shop-panel hidden" id="panel-auto">
+                <div id="rebirth-items"></div>
+            </div>
+
+            <!-- Achievements Panel -->
+            <div class="shop-panel hidden" id="panel-achievements">
+                <div id="achievements-container" class="ach-grid"></div>
+            </div>
+
+            <!-- Multiplier Panel -->
+            <div class="shop-panel hidden" id="panel-multiplier">
+                <div id="mult-minigame"></div>
+            </div>
+
+            <!-- Ascension Panel -->
+            <div class="shop-panel hidden" id="panel-ascension">
+                <div id="ascension-items"></div>
+            </div>
+
+            <!-- Settings Panel -->
+            <div class="shop-panel hidden" id="panel-settings">
+                <div class="settings-section">
+                    <p class="settings-label">danger zone</p>
+                    <button onclick="resetGame()" class="reset-btn settings-reset-btn">🗑️ reset save</button>
+                </div>
+                <div id="account-panel" style="margin-top: 12px;"></div>
+            </div>
+            <div class="version-footer">
+            <a href="changelog.html" class="version-btn" style="font-family: sans-serif;">🏷️ version 0.4.0</a>
+            <a href="leaderboard.html" class="version-btn" style="font-family: sans-serif;">🏆 leaderboard</a>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+    <script src="localstorage.js"></script>
+    <script src="rebirth.js"></script>
+    <script src="achievements.js"></script>
+    <script src="multiplier.js"></script>
+    <script src="ascension.js"></script>
+    <script src="account.js"></script>
+    <script>
+        // Load save, then init
+        loadGame();
+        updateCps();
+        renderShop();
+        renderRebirthShop();
+        renderAchievements();
+        renderMultMinigame();
+        renderAscensionShop();
+        renderSettingsPanel();
+        updateDisplay();
+
+        function openTab(tab) {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.shop-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            document.getElementById('panel-' + tab).classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
